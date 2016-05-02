@@ -1,12 +1,15 @@
+console.log('server is working');
+
 var express = require('express');
 var app = express();
 var bodyParser = require('body-parser');
 var mysql = require('mysql');
 var pool = mysql.createPool({
-	host: 'tophelfdbinstance.c45gzsmabwhe.eu-west-1.rds.amazonaws.com'
-	connectionLimit: 10,
-	user: 'oguzhan',
-	password: 'tophelfmaster',
+	host: '130.211.65.117'
+	//host: 'localhost',
+	connectionLimit: 1000,
+	user: 'root',
+	password: '',
 	database: 'tophelfdb'
 });
 
@@ -17,8 +20,7 @@ app.post('/', function (req, res) {
 	if (req.body == null || req.body.type == null) {
 		res.status(400).end();
 		return;
-	}
-	if (req.body.type === "UserCheck") {
+	} if (req.body.type === "UserCheck") {
 		if (req.body.email == null
 		|| req.body.pass == null) {
 			res.status(400).end();
@@ -33,7 +35,38 @@ app.post('/', function (req, res) {
 				return;
 				//process.exit(1);
 			}
-			connection.query("SELECT u_id FROM User WHERE email = ? AND pass = ?;",[req.body.email,req.body.pass],function(err,rows,fields){
+			connection.query("SELECT u_id, username, phone FROM users WHERE email = ? AND pass = ?;",[req.body.email,req.body.pass],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} if (req.body.type === "GetUserId") {
+		if (req.body.username == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT u_id FROM users WHERE username = ?;",[req.body.username],function(err,rows,fields){
 				if (err) {
 					console.error(err);
 					connection.release();
@@ -52,8 +85,8 @@ app.post('/', function (req, res) {
 		});
 	} else if (req.body.type === "Register") {
 		if (req.body.username == null
-		|| req.body.email == null
 		|| req.body.phone == null
+		|| req.body.email == null
 		|| req.body.pass == null
 		|| req.body.image == null
 		|| req.body.rating == null) {
@@ -69,7 +102,68 @@ app.post('/', function (req, res) {
 				return;
 				//process.exit(1);
 			}
-			connection.query("INSERT INTO User(username,email,phone,pass,image,rating) VALUES (?,?,?,?,?,?);",[req.body.username,req.body.email,req.body.phone,req.body.pass,req.body.image,req.body.rating],function(err,rows,fields){
+			connection.query("SELECT u_id FROM users WHERE email = ? AND pass = ?;",[req.body.email,req.body.pass],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				if (rows.length < 1) {
+					connection.query("INSERT INTO Users(username,phone,email,pass,image,rating) VALUES (?,?,?,?,?,?);",[req.body.username,req.body.phone,req.body.email,req.body.pass,req.body.image,req.body.rating],function(err,rows,fields){
+						if (err) {
+							console.error(err);
+							connection.release();
+							//pool.end();
+							res.status(500).end();
+							return;
+							//process.exit(1);
+						}
+						if (rows.length < 1) {
+							res.status(400).end();
+							return;
+						}
+					});
+				}
+				connection.query("SELECT u_id FROM users WHERE email = ? AND pass = ?;",[req.body.email,req.body.pass],function(err,rows,fields){
+					if (err) {
+						console.error(err);
+						connection.release();
+						//pool.end();
+						res.status(500).end();
+						return;
+						//process.exit(1);
+					}
+					connection.release();
+					if (rows.length < 1) {
+						res.status(400).end();
+						return;
+					}						
+					res.status(200).json(rows).end();
+				});
+			});
+		});
+	} if (req.body.type === "UpdateUser") {
+		if (req.body.username == null
+		|| req.body.u_id == null
+		|| req.body.phone == null
+		|| req.body.old_pass == null
+		|| req.body.new_pass == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("UPDATE users SET username = ?, phone = ?, pass = ? WHERE u_id = ? AND pass = ?;",[req.body.username,req.body.phone,req.body.new_pass,req.body.u_id,req.body.old_pass],function(err,rows,fields){
 				if (err) {
 					console.error(err);
 					connection.release();
@@ -86,9 +180,13 @@ app.post('/', function (req, res) {
 				res.status(200).json(rows).end();
 			});
 		});
-	}/* else if (req.body.type === "UserCheckId") {
-		if (req.body.id == null
-		|| req.body.pass == null) {
+	} /*else if (req.body.type === "Register") {
+		if (req.body.username == null
+		|| req.body.phone == null
+		|| req.body.email == null
+		|| req.body.pass == null
+		|| req.body.image == null
+		|| req.body.rating == null) {
 			res.status(400).end();
 			return;
 		}
@@ -101,7 +199,130 @@ app.post('/', function (req, res) {
 				return;
 				//process.exit(1);
 			}
-			connection.query("SELECT * FROM Customer WHERE CustomerID=? AND CustomerPass=?;",[req.body.id,req.body.pass],function(err,rows,fields){
+			connection.query("INSERT INTO Users(username,phone,email,pass,image,rating) VALUES (?,?,?,?,?,?);",[req.body.username,req.body.phone,req.body.email,req.body.pass,req.body.image,req.body.rating],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	}*/ if (req.body.type === "GetPlace") {
+		if (req.body.placename == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT p_id,info,location FROM place WHERE placename = ?;",[req.body.placename],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "Place") {
+		if (req.body.location == null
+		|| req.body.placename == null
+		|| req.body.info == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT p_id FROM Place WHERE placename = ?;",[req.body.placename],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				if (rows.length < 1) {
+					connection.query("INSERT INTO Place(placename,location,info) VALUES (?,?,?);",[req.body.placename,req.body.location,req.body.info],function(err,rows,fields){
+						if (err) {
+							console.error(err);
+							connection.release();
+							//pool.end();
+							res.status(500).end();
+							return;
+							//process.exit(1);
+						}
+						if (rows.length < 1) {
+							res.status(400).end();
+							return;
+						}
+					});
+					return;
+				}
+				connection.query("SELECT p_id FROM Place WHERE placename = ?;",[req.body.placename],function(err,rows,fields){
+					if (err) {
+						console.error(err);
+						connection.release();
+						//pool.end();
+						res.status(500).end();
+						return;
+						//process.exit(1);
+					}
+					connection.release();
+					if (rows.length < 1) {
+						res.status(400).end();
+						return;
+					}
+					res.status(200).json(rows).end();
+				});
+			});
+		});
+	} /*else if (req.body.type === "Place") {
+		if (req.body.location == null
+		|| req.body.placename == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("INSERT INTO Place(placename,location) SELECT * FROM (SELECT '"+req.body.placename+"','"+req.body.location+"') AS tmp WHERE NOT EXISTS (SELECT placename,location FROM Place WHERE placename="+req.body.placename+" AND location="+req.body.location+") LIMIT 1;",function(err,rows,fields){
 				if (err) {
 					console.error(err);
 					connection.release();
@@ -116,6 +337,726 @@ app.post('/', function (req, res) {
 					return;
 				}
 				res.status(204).end();
+			});
+		});
+	} */else if (req.body.type === "Tag") {
+		if (req.body.tagname == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT t_id FROM Tag WHERE tagname = ?;",[req.body.tagname],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				if (rows.length < 1) {
+					connection.query("INSERT INTO Tag(tagname) VALUES (?);",[req.body.tagname],function(err,rows,fields){
+						if (err) {
+							console.error(err);
+							connection.release();
+							//pool.end();
+							res.status(500).end();
+							return;
+							//process.exit(1);
+						}
+						if (rows.length < 1) {
+							res.status(400).end();
+							return;
+						}
+					});
+					return;
+				}
+				connection.query("SELECT t_id FROM Tag WHERE tagname = ?;",[req.body.tagname],function(err,rows,fields){
+					if (err) {
+						console.error(err);
+						connection.release();
+						//pool.end();
+						res.status(500).end();
+						return;
+						//process.exit(1);
+					}
+					connection.release();
+					if (rows.length < 1) {
+						res.status(400).end();
+						return;
+					}
+					res.status(200).json(rows).end();
+				});
+			});
+		});
+	} /*else if (req.body.type === "Tag") {
+		if (req.body.tagname == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("INSERT INTO Tag(tagname) SELECT * FROM (SELECT '"+req.body.tagname+"') AS tmp WHERE NOT EXISTS (SELECT tagname FROM Tag WHERE tagname="+req.body.tagname+") LIMIT 1;",function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(204).end();
+			});
+		});
+	} */else if (req.body.type === "Comment") {
+		if (req.body.comment == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT c_id FROM Comments WHERE content = ?;",[req.body.comment],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				if (rows.length < 1) {
+					connection.query("INSERT INTO Comments(content) VALUES (?);",[req.body.comment],function(err,rows,fields){
+						if (err) {
+							console.error(err);
+							connection.release();
+							//pool.end();
+							res.status(500).end();
+							return;
+							//process.exit(1);
+						}
+						if (rows.length < 1) {
+							res.status(400).end();
+							return;
+						}
+					});
+					return;
+				}
+				connection.query("SELECT c_id FROM Comments WHERE content = ?;",[req.body.comment],function(err,rows,fields){
+					if (err) {
+						console.error(err);
+						connection.release();
+						//pool.end();
+						res.status(500).end();
+						return;
+						//process.exit(1);
+					}
+					connection.release();
+					if (rows.length < 1) {
+						res.status(400).end();
+						return;
+					}
+					res.status(200).json(rows).end();
+				});
+			});
+		});
+	} /*else if (req.body.type === "Comment") {
+		if (req.body.comment == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("INSERT INTO Comments(content) VALUES (?);",[req.body.comment],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(204).end();
+			});
+		});
+	} */else if (req.body.type === "Vote") {
+		if (req.body.u_id == null
+		|| req.body.p_id == null
+		|| req.body.t_id == null
+		|| req.body.c_id == null
+		|| req.body.rating == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("INSERT INTO Relations(u_id,p_id,t_id,c_id,rating) VALUES (?,?,?,?,?);",[req.body.u_id,req.body.p_id,req.body.t_id,req.body.c_id,req.body.rating],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(204).end();
+			});
+		});
+	} else if (req.body.type === "GetUser") {
+		if (req.body.friend_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT username, email, image, rating FROM users WHERE u_id = ? ;",[req.body.friend_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetFriends") {
+		if (req.body.user_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT u_id2 FROM friend WHERE u_id1 = ?;",[req.body.user_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetMyFriends") {
+		if (req.body.user_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT username, u_id, email FROM users WHERE u_id IN (SELECT u_id2 FROM friend WHERE u_id1 = ?);",[req.body.user_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetUsersSearched") {
+		if (req.body.username == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT * FROM users WHERE username LIKE '%" + req.body.username + "%' LIMIT 5;",function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetPlacesSearched") {
+		if (req.body.placename == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT * FROM place WHERE placename LIKE '%" + req.body.placename + "%' LIMIT 5;",function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetTagsSearched") {
+		if (req.body.tagname == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT * FROM tag WHERE tagname LIKE '%" + req.body.tagname + "%' LIMIT 5;",function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "IsFriend") {
+		if (req.body.friend_id == null
+		|| req.body.user_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT EXISTS (SELECT * FROM Friend WHERE (u_id1 = ? and u_id2 = ?) );",[req.body.user_id,req.body.friend_id,req.body.friend_id,req.body.user_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "AddFriend") {
+		if (req.body.friend_id == null
+		|| req.body.user_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("INSERT INTO Friend(u_id1,u_id2) VALUES (?,?);",[req.body.user_id,req.body.friend_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "RemoveFriend") {
+		if (req.body.friend_id == null
+		|| req.body.user_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("DELETE FROM Friend WHERE (u_id1 = ? AND u_id2 = ?);",[req.body.user_id,req.body.friend_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetRelations") {
+		if (req.body.user_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT username,relations.u_id,email,placename,tagname,content,relations.rating,relationtime,r_id FROM place INNER JOIN relations ON place.p_id = relations.p_id INNER JOIN tag ON tag.t_id = relations.t_id INNER JOIN comments ON comments.c_id = relations.c_id INNER JOIN users ON users.u_id = relations.u_id WHERE relations.u_id = ? ORDER BY relationtime DESC;",[req.body.user_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetPlaceRelations") {
+		if (req.body.place_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT username,relations.u_id,email,placename,tagname,content,relations.rating, relationtime,r_id FROM place INNER JOIN relations ON place.p_id = relations.p_id INNER JOIN tag ON tag.t_id = relations.t_id INNER JOIN comments ON comments.c_id = relations.c_id INNER JOIN users ON users.u_id = relations.u_id WHERE relations.p_id = ? ORDER BY relationtime DESC;",[req.body.place_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetTagRelations") {
+		if (req.body.tag_name == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT username,relations.u_id,email,placename,tagname,content,relations.rating, relationtime,r_id FROM place INNER JOIN relations ON place.p_id = relations.p_id INNER JOIN tag ON tag.t_id = relations.t_id INNER JOIN comments ON comments.c_id = relations.c_id INNER JOIN users ON users.u_id = relations.u_id WHERE relations.t_id = (SELECT t_id FROM tag WHERE tagname = ?) ORDER BY relationtime DESC;",[req.body.tag_name],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "GetRankings") {
+		if (req.body.user_id == null 
+		|| req.body.r_ids == null) {
+			res.status(400).end();
+			return;
+		}
+		var ids = [];
+		for(var i = 0; i < req.body.r_ids.length; i++) {
+			ids.push(parseInt(req.body.r_ids[i].r_id)); 
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT relation_id,rank FROM ranking WHERE user_id = ? AND relation_id IN (?);",[req.body.user_id,ids],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "MakeRankings") {
+		if (req.body.user_id == null 
+		|| req.body.r_id == null
+		|| req.body.rank == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("INSERT INTO ranking(user_id, relation_id, rank) VALUES (?,?,?) ON DUPLICATE KEY UPDATE rank = ?;",[req.body.user_id,req.body.r_id,req.body.rank,req.body.rank],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} else if (req.body.type === "CalcRankings") {
+		if (req.body.user_id == null 
+		|| req.body.vote == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("UPDATE users SET rating = rating + (?) WHERE u_id = ?; ",[req.body.vote,req.body.user_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
+			});
+		});
+	} /*else if (req.body.type === "GetPlacename") {
+		if (req.body.user_id == null) {
+			res.status(400).end();
+			return;
+		}
+		pool.getConnection(function(err, connection) {
+			if (err) {
+				console.error(err);
+				connection.release();
+				//pool.end();
+				res.status(500).end();
+				return;
+				//process.exit(1);
+			}
+			connection.query("SELECT placename,tagname,content, relations.rating FROM place INNER JOIN relations ON place.p_id = relations.p_id INNER JOIN tag ON tag.t_id = relations.t_id INNER JOIN comments ON comments.c_id = relations.c_id WHERE u_id = ?;",[req.body.user_id],function(err,rows,fields){
+				if (err) {
+					console.error(err);
+					connection.release();
+					//pool.end();
+					res.status(500).end();
+					return;
+					//process.exit(1);
+				}
+				connection.release();
+				if (rows.length < 1) {
+					res.status(400).end();
+					return;
+				}
+				res.status(200).json(rows).end();
 			});
 		});
 	} else if (req.body.type === "UserLocation") {
